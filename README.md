@@ -15,5 +15,5 @@ Descriptive Data Visualizations generated from configured variable selections,
 Prediction result and Recommendation generated from predictive models and user input, 
 Data Views in data tables
 
------------------------------------------ Purdue University - Krannert Management School BAIM Program -------------------------------------
----------------------- Using R for Analytics Final Group Project - Beijing Multi-Site Air-Quality Application -----------------------------
+Purdue University - Krannert Management School BAIM Program
+Using R for Analytics Final Group Project - Beijing Multi-Site Air-Quality Application 
