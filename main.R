@@ -41,10 +41,11 @@ library(ggplot2)
 
 
 ################################################################################################
-ui = tagList(
+ui = fluidPage(
   #shinythemes::themeSelector(),
+  theme = "bootstrap.css",
   navbarPage(
-    theme = "lumen",
+    
     "Beijing Multi-Site Air-Quality Data Application",
     tabPanel("Descriptive Data",
              mainPanel(
