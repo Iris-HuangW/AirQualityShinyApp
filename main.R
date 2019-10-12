@@ -1,24 +1,29 @@
+getwd()
+data<-read.table('fullhazedatanomissing.csv',header=TRUE, sep=",")
+spot =  read.csv(file="l_a.csv", header=TRUE, sep=",")
+names(spot)[1] = 'desc'
 
-data <- read.csv(file="C:\\Users\\Iris Huang\\Downloads\\fullhazedatanomissing.csv", header=TRUE, sep=",")
-data <- data[,3:ncol(data)]
+source('data_conversion.R')
+source('dataclean.R')
+source('calender_plot.R')
+source('time_variation.R')
+source('summary_plot.R')
 
-#install.packages('shinythemes')
+library(shiny)
+library(caret)
+library(dplyr)
+library(readr)
+library(fastDummies)
+library(randomForest)
 library(shinythemes)
-#install.packages('leaflet')
-#install.packages('maps')
 library(leaflet)
 library(DT)
-
+library(openair)
 library(maps)
-
-#install.packages('ggmap')
 library(ggmap)
 library(ggplot2)
-
-
-
-#install.packages("shinydashboard")
 library(shinydashboard)
+
 #install.packages('')
 ################################################################################################
 #mapStates = map("state", fill = TRUE, plot = FALSE)
@@ -45,6 +50,65 @@ library(shinydashboard)
 #ggmap(Aotizhongxin)
 
 ################################################################################################
+d<-dataclean(data)
+
+#change wind speed to positive value
+d$DEWP = abs(d$DEWP)
+
+
+#create dummy variables
+library(fastDummies)
+d = dummy_cols(d, select_columns = c("wd", "station"))
+d$wd = NULL
+d$station = NULL
+
+
+#correlation (No Result)
+library(caret)
+d=d%>%
+  select(PM2.5, everything())
+
+descrCor <-  cor(d[,2:ncol(d)])                          
+
+highlyCorDescr <- findCorrelation(descrCor, cutoff = 0.8)
+filteredDescr <- d[,2:ncol(d)][,-highlyCorDescr]
+descrCor2 <- cor(filteredDescr)
+
+summary(descrCor2[upper.tri(descrCor2)])
+d <- cbind(d$PM2.5, filteredDescr)
+names(d)[1] <- "PM2.5"
+
+rm(filteredDescr, descrCor, descrCor2,  highlyCorDescr)
+
+
+#pre-processing
+preProcValues <- preProcess(d[,2:ncol(d)], method = c("range"))
+d <- predict(preProcValues, d)
+
+set.seed(1234) # set a seed so you can replicate your results
+inTrain <- createDataPartition(y = d$PM2.5,   # outcome variable
+                               p = .90,   # % of training data you want
+                               list = F)
+# create your partitions
+train <- d[inTrain,]  # training data set
+test <- d[-inTrain,]  # test data set
+rm(inTrain)
+
+ctrl <- trainControl(method="cv",     # cross-validation set approach to use
+                     number=5,        # k number of times to do k-fold
+                     classProbs = F,  # if you want probabilities
+                     #summaryFunction = twoClassSummary, # for classification
+                     summaryFunction = defaultSummary,  # for regression
+                     allowParallel=T)
+
+m1 <- train(PM2.5 ~ .,               # model specification
+            data = train,        # train set used to build model
+            method = "lm",      # type of model you want to build
+            trControl = ctrl,    # how you want to learn
+            metric = "RMSE"       # performance measure
+)
+m1
+################################################################################################
 ui <- dashboardPage(
   dashboardHeader(title = "Beijing Air-Quality Application"),
   dashboardSidebar(
@@ -63,35 +127,62 @@ ui <- dashboardPage(
     fluidRow(
       tabItems(
         tabItem(tabName = "desc",
-                sidebarPanel(
-                    selectInput("SelStation", h4("Select Station"), choices = 
-                                  list("Aotizhongxin" = "Aotizhongxin", 
-                                       "Changping" = "Changping",
-                                       "Dingling" = "Dingling",
-                                       "Dongsi" = "Dongsi",
-                                       "Guanyuan" = "Guanyuan",
-                                       "Gucheng" = "Gucheng",
-                                       "Huairou" = "Huairou",
-                                       "Nongzhanguan" = "Nongzhanguan",
-                                       "Shunyi" = "Shunyi",
-                                       "Tiantan" = "Tiantan",
-                                       "Wanliu" = "Wanliu",
-                                       "Wanshouxigong" = "Wanshouxigong"), 
-                                selected = "Tiantan"),
-                    sliderInput("SelYear", h4("Select Year"), value = 2015, min = 2013, max = 2017)
-                    
-                ),
+                
                 mainPanel(
+                  sliderInput(inputId="Year", label="Select Year", 
+                              min=2013, max=2017,value=2013),
+                  selectInput(inputId = "station", label="Choose Station",
+                              choices = list("Aotizhongxin"="Aotizhongxin","Changping"="Changping","Dingling"="Dingling",'Dongsi'='Dongsi',
+                                             'Guanyuan'='Guanyuan','Gucheng'='Gucheng','Huairou'='Huairou','Nongzhanguan'='Nongzhanguan',
+                                             'Shunyi'='Shunyi','Tiantan'='Tiantan','Wanliu'='Wanliu','Wanshouxigong'='Wanshouxigong')),
+                  plotOutput(outputId='calendarplot'),
+                  
+                  plotOutput(outputId='timevariation'),
+                  
+                  plotOutput(outputId='summaryplot')
                   
                 )
         ),
         tabItem(tabName = "map",
-                sidebarPanel(
+                absolutePanel(
+                  h2("PM2.5 Prediction"),
+                  id = "controls", class = "panel panel-default", fixed = TRUE,
+                  draggable = TRUE, top = 60, left = "auto", right = 20, bottom = "auto",
+                  width = 330, height = 1000,
+                  checkboxInput('input_draw_point', 'Draw point', FALSE ),
+                  verbatimTextOutput('summary'),
+                  style = "opacity: 0.85; z-index: 10;",
                   
+                  sliderInput(inputId="Year", label="Select Year", 
+                              min=2018, max=2025,value=2018),
+                  sliderInput(inputId="Month", label="Select Month", 
+                              min=1, max=12,value=1),
+                  numericInput(inputId="Day", label="Enter Day", 
+                               value=1,min=1, max=31),
+                  numericInput(inputId="Hour", label="Enter Hour", 
+                               value=0,min=0, max=24),
+                  numericInput(inputId="TEMP", label="Enter Temperature", 
+                               value=0,min=-50, max=40),
+                  numericInput(inputId="PRES", label="Enter Pressure", 
+                               value=0,min=0, max=2),
+                  numericInput(inputId="DEWP", label="Enter Dew Point Temperature", 
+                               value=0,min=-50, max=50),
+                  numericInput(inputId="Rain", label="Enter Rain Precipitation ", 
+                               value=0,min=0, max=200),
+                  selectInput(inputId = "wd", label="Choose Wind Direction",
+                              choices = list("E"="E","ENE"="ENE","ESE"="ESE",'N'='N','NE'='NE','NNE'='NNE','NNW'='NNW','NW'='NW','S'='S','SE'='SE',
+                                             'SSE'='SSE','SSW'='SSW','SW'='SW','W'='W','WNW'='WNW','WSW'='WSW')),
+                  numericInput(inputId="WSPM", label="Enter Wind Speed", 
+                               value=0,min=0, max=20),
+                  selectInput(inputId = "station", label="Choose Station",
+                              choices = list("Aotizhongxin"="Aotizhongxin","Changping"="Changping","Dingling"="Dingling",'Dongsi'='Dongsi',
+                                             'Guanyuan'='Guanyuan','Gucheng'='Gucheng','Huairou'='Huairou','Nongzhanguan'='Nongzhanguan',
+                                             'Shunyi'='Shunyi','Tiantan'='Tiantan','Wanliu'='Wanliu','Wanshouxigong'='Wanshouxigong')),
+                  actionButton("Enter", "Enter Values"),
+                  verbatimTextOutput("modelSummary")
                 ),
-                mainPanel(
-                  leafletOutput("map")
-                )
+                
+                leafletOutput("map", width=1500, height=1000)
         ),
         tabItem(tabName = "table",
                 sidebarPanel(
@@ -104,10 +195,14 @@ ui <- dashboardPage(
         ),
         tabItem(tabName = "info",
                 sidebarPanel("Information",
-                             h5("Project instructor: Matthew Lanham"),
+                             h5("Maintainer: Mario, Tom, Vera, Iris"),
                              h5("Version: 1.0"),
-                             h6("Contact us:"),
-                             a("666666@purdue.edu")
+                             h5("Contact us:"),
+                             h6("lanhamm@purdue.edu"),
+                             h6("chen@purdue.edu"),
+                             h6("wei@purdue.edu"),
+                             h6("guo@purdue.edu"),
+                             h6("huang@purdue.edu")
                              
                 ),
                 mainPanel(
@@ -158,12 +253,91 @@ ui <- dashboardPage(
 
 ################################################################################################
 server = function(input, output) {
-  output$table <- DT::renderDataTable({
-    DT::datatable(data[, input$show_vars, drop = FALSE])
+  
+  output$calendarplot <- renderPlot({
+    calendar_plot(data,input$station,input$Year)
   })
+  
+  output$timevariation <- renderPlot({
+    time_variation(data,input$station,input$Year)
+  })
+  
+  output$summaryplot <- renderPlot({
+    summary_plot(data,input$Year)
+  })
+  
   output$map <- renderLeaflet({
-    leaflet()%>%addTiles()%>%addMarkers(lng=116.391, lat=39.912, popup="这里是北京")
+    leaflet()%>%addTiles()%>%addMarkers(lng=-116.40, lat=31.5, popup="Welcome to Beijing")
+    leaflet(spot) %>% addTiles() %>%
+      addCircles(lng = ~lat, lat = ~long, weight = 1,radius = 1000, popup = ~desc
+      )
   })
+  
+  observeEvent( input$Enter, {
+    year = input$Year
+    month = input$Month
+    day = input$Day
+    hour = input$Hour
+    TEMP = input$TEMP
+    PRES = input$PRES
+    DEWP = input$DEWP
+    RAIN = input$Rain
+    WSPM = input$WSPM
+    
+    
+    wd = as.factor(input$wd)
+    wd_E = ifelse(wd == 'E', 1, 0)
+    wd_ENE = ifelse(wd == 'ENE', 1, 0)
+    wd_ESE = ifelse(wd == 'ESE', 1, 0)
+    wd_N = ifelse(wd == 'N', 1, 0)
+    wd_NE = ifelse(wd == 'NE', 1, 0)
+    wd_NNE = ifelse(wd == 'NNE', 1, 0)
+    wd_NNW = ifelse(wd == 'NNW', 1, 0)
+    wd_NW = ifelse(wd == 'NW', 1, 0)
+    wd_S = ifelse(wd == 'S', 1, 0)
+    wd_SE = ifelse(wd == 'SE', 1, 0)
+    wd_SSE = ifelse(wd == 'SSE', 1, 0)
+    wd_SSW = ifelse(wd == 'SW', 1, 0)
+    wd_SW = ifelse(wd == 'SW', 1, 0)
+    wd_W = ifelse(wd == 'W', 1, 0)
+    wd_WNW = ifelse(wd == 'WNW', 1, 0)
+    wd_WSW = ifelse(wd == 'WSW', 1, 0)
+    
+    station = as.factor(input$station)
+    station_Aotizhongxin = ifelse(station == 'Aotizhongxin', 1, 0)
+    station_Changping = ifelse(station == 'Changping', 1, 0)
+    station_Dingling = ifelse(station == 'Dingling', 1, 0)
+    station_Dongsi = ifelse(station == 'Dongsi', 1, 0)
+    station_Guanyuan = ifelse(station == 'Guanyuan', 1, 0)
+    station_Gucheng = ifelse(station == 'Gucheng', 1, 0)
+    station_Huairou = ifelse(station == 'Huairou', 1, 0)
+    station_Nongzhanguan = ifelse(station == 'Nongzhanguan', 1, 0)
+    station_Shunyi = ifelse(station == 'Shunyi', 1, 0)
+    station_Tiantan = ifelse(station == 'Tiantan', 1, 0)
+    station_Wanliu = ifelse(station == 'Wanliu', 1, 0)
+    station_Wanshouxigong = ifelse(station == 'Wanshouxigong', 1, 0)
+    
+    
+    t = data.frame(year, month, day,hour,TEMP,PRES,DEWP,RAIN,wd,WSPM,station, 
+                   wd_E, wd_ENE, wd_ESE, wd_N, wd_NE, wd_NNE, wd_NNW, wd_NW, wd_S, wd_SE, wd_SSE, wd_SSW, wd_SW, wd_W, wd_WNW, wd_WSW,
+                   station_Aotizhongxin, station_Changping, station_Dingling, station_Dongsi, station_Guanyuan, station_Gucheng, station_Huairou,
+                   station_Nongzhanguan, station_Shunyi, station_Tiantan, station_Wanliu, station_Wanshouxigong)
+    
+    #t = dummy_cols(t, select_columns = c("wd", "station"))
+    t$wd = NULL
+    t$station = NULL
+    
+    output$modelSummary <- renderPrint({
+      p<-predict(m1,newdata = t)
+      p = abs(p)/500
+      myTestPreds=as.data.frame(p)
+      myTestPreds
+    })
+  })
+  
+  output$table <- DT::renderDataTable(
+    DT::datatable(data[, input$show_vars])
+  )
   
 }
 
