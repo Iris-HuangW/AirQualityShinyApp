@@ -15,6 +15,11 @@ library(maps)
 library(ggmap)
 library(ggplot2)
 
+
+
+#install.packages("shinydashboard")
+library(shinydashboard)
+#install.packages('')
 ################################################################################################
 #mapStates = map("state", fill = TRUE, plot = FALSE)
 #leaflet(data = mapStates) %>% addTiles() %>%
@@ -39,74 +44,59 @@ library(ggplot2)
 #Aotizhongxin = get_map(geocode("Beijing Olympic Sports Center"),zoom=12)
 #ggmap(Aotizhongxin)
 
-
 ################################################################################################
-ui = fluidPage(
-  #shinythemes::themeSelector(),
-  theme = "bootstrap.css",
-  navbarPage(
+ui <- dashboardPage(
+  dashboardHeader(title = "Beijing Air-Quality Application"),
+  dashboardSidebar(
+    # Custom CSS to hide the default logout panel
     
-    "Beijing Multi-Site Air-Quality Data Application",
-    tabPanel("Descriptive Data",
-             mainPanel(
-               tabsetPanel(
-                 tabPanel("Descriptive Graph Name 1",
-                          h4("Table"),
-                          plotOutput("plot2"),
-                          h5("Description")
-                 ),
-                 tabPanel("Descriptive Graph Name 2",
-                          h4("Table"),
-                          plotOutput("plot2"),
-                          h5("Description")
-                 ),
-                 tabPanel("Descriptive Graph Name 3",
-                          h4("Table"),
-                          plotOutput("plot3"),
-                          h5("Description")
-                 )
-               )
-             )
-    ),
-    tabPanel("Maps and Predictive Models", 
-             sidebarPanel(
-               textInput("txt", "Text input:", "general"),
-               sliderInput("slider", "Slider input:", 1, 100, 30),
-               tags$h5("Deafult actionButton:"),
-               actionButton("action", "Search"),
-               tags$h5("actionButton with CSS class:"),
-               actionButton("action2", "Action button", class = "btn-primary")
-             ),
-             mainPanel(
-               
-               
-             )
-    ),
-    tabPanel("Data Explorer", 
-             sidebarPanel(
-               conditionalPanel(
-                 'input.dataset === "data"',
-                 checkboxGroupInput("show_vars", "Columns to show:",
-                                    names(data), selected = names(data))
-               )
-             ),
-             mainPanel(
-               dataTableOutput("table")
-             )
-    ),
-    tabPanel("About Us",
-             "This shiny app is designed for ....If you have any concern."
+    sidebarMenu(
+      
+      menuItem("Descriptive", tabName = "desc", icon = icon("dashboard")),
+      menuItem("Maps & Predictive", tabName = "map", icon = icon("map-marker",lib = "glyphicon")),
+      menuItem("Data Table", tabName = "table", icon = icon("th")),
+      menuItem("About Us", tabName = "info", icon = icon("header",lib = "glyphicon"))
+    )
+  ),
+  dashboardBody(
+    fluidRow(
+      tabItems(
+        tabItem(tabName = "desc"
+        ),
+        tabItem(tabName = "map",
+                sidebarPanel(
+                  
+                ),
+                mainPanel(
+                  leafletOutput("map")
+                )
+        ),
+        tabItem(tabName = "table",
+                sidebarPanel(
+                  checkboxGroupInput("show_vars", "Columns to show:",
+                                     names(data), selected = names(data))
+                ),
+                mainPanel(
+                  dataTableOutput("table")
+                )
+        ),
+        tabItem(tabName = "info",
+                mainPanel('This app is awesome'))
+        
+      )
     )
   )
 )
-data <- head(data,n=100)
+
+################################################################################################
+
 ################################################################################################
 server = function(input, output) {
   output$table <- DT::renderDataTable({
     DT::datatable(data[, input$show_vars, drop = FALSE])
   })
   output$map <- renderLeaflet({
-    
+    leaflet()%>%addTiles()%>%addMarkers(lng=116.391, lat=39.912, popup="这里是北京")
   })
   
 }
