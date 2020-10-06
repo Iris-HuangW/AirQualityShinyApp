@@ -9,9 +9,13 @@ Air polution in Beijing, China has been a serious environment problem endangerin
 Beijing Multi-Site Air-Quality Data Data Set: This data set includes hourly air pollutants data from 12 nationally-controlled air-quality monitoring sites. The air-quality data are from the Beijing Municipal Environmental Monitoring Center. The meteorological data in each air-quality site are matched with the nearest weather station from the China Meteorological Administration. The time period is from March 1st, 2013 to February 28th, 2017. Missing data are denoted as NA.
 http://archive.ics.uci.edu/ml/datasets/Beijing+Multi-Site+Air-Quality+Data#
 
-### Packages
+### Tools and Packages
 
-The application use the following packages : H2O, Caret, shiny, shinyWidgets, shinythemes, leaflet, ggmap. To see which versions of these packages are used (and dependancies), look at the file package_info.txt in app directory. If packages are not installed, they will be on application launch.
+The application use the following tools and packages : 
+- R
+- H2O, Caret, shiny, shinyWidgets, shinythemes, leaflet, ggmap, map
+- Google API
+To see which versions of these packages are used (and dependancies), look at the file package_info.txt in app directory. If packages are not installed, they will be on application launch.
 
 ### Features and Functionalities
 
