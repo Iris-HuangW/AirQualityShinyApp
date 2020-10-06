@@ -15,6 +15,7 @@ The application use the following tools and packages :
 - R
 - H2O, Caret, shiny, shinyWidgets, shinythemes, leaflet, ggmap, map
 - Google API
+
 To see which versions of these packages are used (and dependancies), look at the file package_info.txt in app directory. If packages are not installed, they will be on application launch.
 
 ### Features and Functionalities
